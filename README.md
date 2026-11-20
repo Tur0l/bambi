@@ -1,3 +1,6 @@
+> **Bambi Táctil** — este es un fork con modo táctil para usar Bambi en el móvil (en horizontal). Qué cambia, cómo
+> se instala y cómo se mantiene: [FORK.md](FORK.md). El proyecto original es [grodri99/bambi](https://github.com/grodri99/bambi).
+
 <div align="center">
 
 <img src="docs/bambi_original.jpg" alt="Bambi" width="220" />

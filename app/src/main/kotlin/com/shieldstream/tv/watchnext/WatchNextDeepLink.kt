@@ -15,7 +15,7 @@ data class WatchNextRequest(
 internal fun parseWatchNextRequest(intent: Intent): WatchNextRequest? {
     if (intent.action != Intent.ACTION_VIEW) return null
     val uri = intent.data ?: return null
-    if (uri.scheme != "shieldstream" || uri.host != "resume") return null
+    if (uri.scheme != WATCH_NEXT_SCHEME || uri.host != "resume") return null
 
     val path = uri.pathSegments
     if (path.size != 2) return null
@@ -39,3 +39,9 @@ internal fun parseWatchNextRequest(intent: Intent): WatchNextRequest? {
 
     return WatchNextRequest(profileId, type, mediaId, target)
 }
+
+/**
+ * Fork táctil: esquema propio del enlace de «Seguir viendo» de Android TV. Con el de upstream ("shieldstream"), una
+ * tele con las dos apps instaladas abría un selector al pulsar un título del menú de inicio.
+ */
+internal const val WATCH_NEXT_SCHEME = "bambitactil"

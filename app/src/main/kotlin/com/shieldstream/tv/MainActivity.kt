@@ -24,6 +24,7 @@ import com.shieldstream.tv.ui.theme.LocalSoftBackdrops
 import com.shieldstream.tv.ui.theme.LocalHighResBackdrops
 import com.shieldstream.tv.ui.theme.ShieldStreamTheme
 import com.shieldstream.tv.ui.touch.ProvideTouchUi
+import com.shieldstream.tv.ui.touch.TouchMode
 import com.shieldstream.tv.ui.touch.isTouchFirstDevice
 import com.shieldstream.tv.watchnext.WatchNextManager
 import com.shieldstream.tv.watchnext.WatchNextRequest
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
         AppColors.applyTheme(profiles.active.value.theme)
         StartupTrace.mark("Activity tema")
         touchUi = isTouchFirstDevice()
+        TouchMode.enabled = touchUi
         if (touchUi) TouchWindow.enterImmersive(window)
         setContent {
             StartupTrace.mark("primera composición")

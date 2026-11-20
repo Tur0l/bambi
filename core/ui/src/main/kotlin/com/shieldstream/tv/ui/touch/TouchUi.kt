@@ -40,6 +40,15 @@ import kotlin.math.abs
  */
 val LocalTouchUi = staticCompositionLocalOf { false }
 
+/**
+ * Lo mismo que [LocalTouchUi] para código que no está en una composición (modificadores). MainActivity lo fija una
+ * vez antes de setContent; en la tele se queda en false y esos modificadores no añaden nada.
+ */
+object TouchMode {
+    @Volatile
+    var enabled: Boolean = false
+}
+
 /** Alto, en dp, para el que está diseñada la interfaz: una tele 1080p (960×540 dp). */
 const val TV_DESIGN_HEIGHT_DP = 540f
 

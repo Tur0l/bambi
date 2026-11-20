@@ -37,6 +37,9 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
     @Inject
     lateinit var watchNext: WatchNextManager
 
+    @Inject
+    lateinit var settings: com.shieldstream.tv.domain.SettingsRepository
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
 
@@ -50,6 +53,9 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
         tokenStore.seedOnce(TokenStore.RD_TOKEN, BuildConfig.RD_TOKEN)
         tokenStore.seedOnce(TokenStore.TMDB_KEY, BuildConfig.TMDB_API_KEY)
         tokenStore.seedOnce(TokenStore.SUBDL_KEY, BuildConfig.SUBDL_API_KEY)
+        // Fork táctil: APK preconfigurada (-PseedFile): clave de AllDebrid y servicio debrid elegido, una sola vez.
+        tokenStore.seedOnce(TokenStore.keyNameFor(ApiService.ALLDEBRID), BuildConfig.ALLDEBRID_KEY)
+        seedDebridChoice(BuildConfig.SEED_DEBRID)
         // Solo en Bambi Pruebas: si no hay ningún addon, se deja preconfigurado Torrentio (código abierto) limitado
         // a las webs españolas, para tener una sección solo con fuentes en castellano. Se quita desde Ajustes → Addons.
         if (BuildConfig.DEBUG) {
@@ -65,9 +71,20 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
         }
     }
 
+    /** Deja elegido el servicio debrid de la APK preconfigurada si el usuario aún no ha elegido ninguno. */
+    private fun seedDebridChoice(name: String) {
+        if (name.isBlank()) return
+        val service = runCatching { com.shieldstream.tv.domain.DebridService.valueOf(name) }.getOrNull() ?: return
+        val prefs = getSharedPreferences(AppLanguage.PREFS, MODE_PRIVATE)
+        if (prefs.contains(KEY_DEBRID_CHOICE)) return
+        kotlinx.coroutines.runBlocking { settings.setDebridService(service) }
+    }
+
     override fun newImageLoader(): ImageLoader = imageLoader.get()
 
     private companion object {
+        /** Misma clave que SettingsRepositoryImpl.KEY_DEBRID. */
+        const val KEY_DEBRID_CHOICE = "debrid_service"
         const val DEBUG_SPANISH_ADDON =
             "https://torrentio.strem.fun/providers=mejortorrent,wolfmax4k,cinecalidad|language=spanish/manifest.json"
     }

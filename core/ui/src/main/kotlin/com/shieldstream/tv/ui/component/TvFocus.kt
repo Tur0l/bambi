@@ -14,7 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.composed
-import com.shieldstream.tv.ui.touch.LocalTouchUi
+import com.shieldstream.tv.ui.touch.TouchMode
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -101,18 +101,21 @@ fun Modifier.consumeInitialConfirmationKeyUp(): Modifier {
     }
 }
 
-fun Modifier.onBackKey(enabled: Boolean, onBack: () -> Unit): Modifier = composed {
-    // Fork táctil: la tecla Atrás solo llega al elemento con foco y a sus padres. Con el dedo a menudo no hay foco
-    // (p.ej. al abrir una categoría desaparece el botón que lo tenía) y el gesto de atrás iba directo a cerrar la app.
-    // En el móvil se registra además en el sistema; si sí hay foco, la tecla se consume aquí abajo y esto no salta.
-    if (LocalTouchUi.current) {
-        val latest by rememberUpdatedState(onBack)
-        BackHandler(enabled = enabled) { latest() }
-    }
-    onKeyEvent { event ->
+fun Modifier.onBackKey(enabled: Boolean, onBack: () -> Unit): Modifier {
+    val key = onKeyEvent { event ->
         if (!enabled || (event.key != Key.Back && event.key != Key.Escape)) return@onKeyEvent false
         if (event.type == KeyEventType.KeyUp) onBack()
         true
+    }
+    // Fork táctil: la tecla Atrás solo llega al elemento con foco y a sus padres. Con el dedo a menudo no hay foco
+    // (p.ej. al abrir una categoría desaparece el botón que lo tenía) y el gesto de atrás iba directo a cerrar la app.
+    // En el móvil se registra además en el sistema; si sí hay foco, la tecla se consume arriba y esto no salta.
+    // En la tele (TouchMode.enabled = false) el modificador es exactamente el de siempre.
+    if (!TouchMode.enabled) return key
+    return composed {
+        val latest by rememberUpdatedState(onBack)
+        BackHandler(enabled = enabled) { latest() }
+        key
     }
 }
 
