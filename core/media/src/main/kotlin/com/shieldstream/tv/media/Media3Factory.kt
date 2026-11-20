@@ -106,6 +106,8 @@ private class ShieldRenderersFactory(
         DefaultAudioSink.Builder(context)
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+            // Fork táctil: en el móvil el 5.1/7.1 se mezcla a estéreo aquí (ver StereoDownmix).
+            .apply { if (!StereoDownmix.isTelevision(context)) setAudioProcessors(arrayOf(StereoDownmix.processor())) }
             .build(),
         audioOutput,
     )
