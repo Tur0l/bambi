@@ -1,5 +1,6 @@
 package com.shieldstream.tv.ui.component
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -10,7 +11,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.composed
+import com.shieldstream.tv.ui.touch.LocalTouchUi
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -97,10 +101,19 @@ fun Modifier.consumeInitialConfirmationKeyUp(): Modifier {
     }
 }
 
-fun Modifier.onBackKey(enabled: Boolean, onBack: () -> Unit): Modifier = onKeyEvent { event ->
-    if (!enabled || (event.key != Key.Back && event.key != Key.Escape)) return@onKeyEvent false
-    if (event.type == KeyEventType.KeyUp) onBack()
-    true
+fun Modifier.onBackKey(enabled: Boolean, onBack: () -> Unit): Modifier = composed {
+    // Fork táctil: la tecla Atrás solo llega al elemento con foco y a sus padres. Con el dedo a menudo no hay foco
+    // (p.ej. al abrir una categoría desaparece el botón que lo tenía) y el gesto de atrás iba directo a cerrar la app.
+    // En el móvil se registra además en el sistema; si sí hay foco, la tecla se consume aquí abajo y esto no salta.
+    if (LocalTouchUi.current) {
+        val latest by rememberUpdatedState(onBack)
+        BackHandler(enabled = enabled) { latest() }
+    }
+    onKeyEvent { event ->
+        if (!enabled || (event.key != Key.Back && event.key != Key.Escape)) return@onKeyEvent false
+        if (event.type == KeyEventType.KeyUp) onBack()
+        true
+    }
 }
 
 fun Modifier.tvClickable(enabled: Boolean = true, onClick: () -> Unit): Modifier =

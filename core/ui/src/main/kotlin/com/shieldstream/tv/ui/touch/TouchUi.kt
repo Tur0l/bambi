@@ -19,6 +19,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import kotlin.math.abs
 
 /**
  * Modo táctil (fork para móvil): true en un aparato con pantalla táctil que no es una tele.
@@ -69,3 +83,64 @@ fun ProvideTouchUi(enabled: Boolean, content: @Composable () -> Unit) {
         }
     }
 }
+
+/**
+ * Deslizar hacia arriba sobre una pantalla que no se desplaza (la portada del Inicio): en la tele se pasa a las
+ * filas con ▼; con el dedo, con este gesto. No consume nada: las filas horizontales de dentro siguen funcionando.
+ */
+fun Modifier.touchSwipeUp(enabled: Boolean, onSwipe: () -> Unit): Modifier = if (!enabled) this else composed {
+    val latest by rememberUpdatedState(onSwipe)
+    val threshold = with(LocalDensity.current) { SWIPE_THRESHOLD.toPx() }
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var fired = false
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Final)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                val dx = change.position.x - down.position.x
+                val dy = change.position.y - down.position.y
+                if (!fired && dy < -threshold && abs(dy) > 1.5f * abs(dx)) {
+                    fired = true
+                    latest()
+                }
+            } while (change.pressed)
+        }
+    }
+}
+
+/**
+ * Tirar hacia abajo cuando la lista de dentro ya está arriba del todo (las filas del Inicio): vuelve a la vista de
+ * encima, como ▲ en la primera fila con el mando. Escucha el desplazamiento anidado, así que solo salta con lo que la
+ * lista no ha podido usar.
+ */
+fun Modifier.touchPullDown(enabled: Boolean, onPull: () -> Unit): Modifier = if (!enabled) this else composed {
+    val latest by rememberUpdatedState(onPull)
+    val threshold = with(LocalDensity.current) { SWIPE_THRESHOLD.toPx() }
+    val connection = remember(threshold) {
+        object : NestedScrollConnection {
+            var pulled = 0f
+            var fired = false
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput) {
+                    if (available.y > 0f && consumed.y == 0f) pulled += available.y else if (consumed.y != 0f) pulled = 0f
+                    if (!fired && pulled > threshold) {
+                        fired = true
+                        latest()
+                    }
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                pulled = 0f
+                fired = false
+                return Velocity.Zero
+            }
+        }
+    }
+    nestedScroll(connection)
+}
+
+private val SWIPE_THRESHOLD = 72.dp

@@ -1,5 +1,8 @@
 package com.shieldstream.tv.home
 
+import com.shieldstream.tv.ui.touch.LocalTouchUi
+import com.shieldstream.tv.ui.touch.touchPullDown
+import com.shieldstream.tv.ui.touch.touchSwipeUp
 import com.shieldstream.tv.ui.theme.AppSpacing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -178,13 +181,21 @@ private fun HomeContent(
     LaunchedEffect(parkingFocus) {
         if (parkingFocus) runCatching { parkingRequester.requestFocus() }
     }
+    val touchUi = LocalTouchUi.current
     Box(
         Modifier
             .fillMaxSize()
             .focusRequester(parkingRequester)
             .onFocusChanged { if (it.hasFocus && !it.isFocused) parkingFocus = false }
             .focusProperties { canFocus = parkingFocus }
-            .focusTarget(),
+            .focusTarget()
+            // Fork táctil: deslizar hacia arriba en la portada = ▼ a las filas; tirar hacia abajo con las filas
+            // arriba del todo = ▲ de vuelta a la portada.
+            .touchSwipeUp(enabled = touchUi && !inRows && rows.isNotEmpty()) { switchView { inRows = true } }
+            .touchPullDown(enabled = touchUi && inRows) {
+                topFocus = if (featured.isNotEmpty()) TopFocus.HERO else TopFocus.CHIPS
+                switchView { inRows = false }
+            },
     ) {
         if (inRows && rows.isNotEmpty()) saveable.SaveableStateProvider("rows") {
             RowsBrowser(
