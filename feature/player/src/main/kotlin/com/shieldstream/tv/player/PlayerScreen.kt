@@ -236,6 +236,11 @@ fun PlayerScreen(
 
     // --- Fork táctil: gestos y botones del móvil (PlayerTouch.kt). En la tele touchUi = false y no se usa nada. ---
     val touchUi = LocalTouchUi.current
+    val childLock by PlayerChildLock.locked.collectAsStateWithLifecycle()
+    val childLocked = touchUi && childLock
+    var lockHint by remember { mutableIntStateOf(0) }
+    // Bloqueado, el gesto de atrás no cierra la película: solo enseña el candado.
+    BackHandler(enabled = childLocked) { lockHint++ }
     val touchActivity = remember(context) { context.findActivity() }
     val audio = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     var touchVolume by remember { mutableFloatStateOf(-1f) }
@@ -335,6 +340,11 @@ fun PlayerScreen(
         nextUp !is NextUpUiState.Showing
 
     fun handleKey(event: KeyEvent): Boolean {
+        // Bloqueo infantil: se tragan todas las teclas, también Atrás y los botones físicos de volumen.
+        if (childLocked) {
+            if (event.type == KeyEventType.KeyDown) lockHint++
+            return true
+        }
         if (event.type != KeyEventType.KeyDown) return false
         if (event.key == Key.MediaStop) {
             if (event.nativeKeyEvent.repeatCount == 0) onBack()
@@ -532,7 +542,7 @@ fun PlayerScreen(
             activeExternal?.let { ExternalSubtitleOverlay(exoPlayer, it, subtitleTiming, subtitleAppearance) }
         }
 
-        if (touchUi && state == PlayerUiState.Playing && !syncOpen) {
+        if (touchUi && state == PlayerUiState.Playing && !syncOpen && !childLocked) {
             PlayerTouchGestures(
                 onTap = {
                     when {
@@ -583,7 +593,7 @@ fun PlayerScreen(
             }
             if (touchUi) {
                 PlayerTouchButtons(
-                    visible = controlsVisible && !syncOpen && !tracksOpen && scrubMs == null,
+                    visible = controlsVisible && !syncOpen && !tracksOpen && scrubMs == null && !childLocked,
                     isPlaying = playback.isPlaying,
                     onBack = onBack,
                     onPlayPause = ::touchPlayPause,
@@ -592,6 +602,14 @@ fun PlayerScreen(
                     onOpenTracks = {
                         controlsVisible = false
                         tracksOpen = true
+                    },
+                    onLock = {
+                        PlayerChildLock.locked.value = true
+                        controlsVisible = false
+                        tracksOpen = false
+                        lockHint++
+                        // Con el foco en el reproductor, los botones de volumen pasan por handleKey y se bloquean.
+                        runCatching { focusRequester.requestFocus() }
                     },
                 )
             }
@@ -684,6 +702,16 @@ fun PlayerScreen(
             is PlayerUiState.Error -> StatusOverlay(title = title, message = s.message, loading = false)
             PlayerUiState.Playing -> Unit
         }
+
+        if (childLocked) {
+            PlayerLockOverlay(
+                hint = lockHint,
+                onUnlock = {
+                    PlayerChildLock.locked.value = false
+                    showControls()
+                },
+            )
+        }
     }
 }
 
@@ -772,7 +800,7 @@ private fun ControlsOverlay(
         )
         Column(
             // Con el dedo, a los lados del título van los botones de volver y de audio/subtítulos.
-            Modifier.align(Alignment.TopStart).padding(start = if (touch) 72.dp else 48.dp, top = 28.dp, end = if (touch) 80.dp else 48.dp),
+            Modifier.align(Alignment.TopStart).padding(start = if (touch) 72.dp else 48.dp, top = 28.dp, end = if (touch) 136.dp else 48.dp),
         ) {
             Text(
                 text = title,

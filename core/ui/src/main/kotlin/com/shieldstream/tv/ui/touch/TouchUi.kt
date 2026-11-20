@@ -1,6 +1,14 @@
 package com.shieldstream.tv.ui.touch
 
+import android.app.Activity
 import android.app.UiModeManager
+import android.content.ContextWrapper
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import kotlinx.coroutines.delay
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -86,8 +94,14 @@ fun ProvideTouchUi(enabled: Boolean, content: @Composable () -> Unit) {
                 val fitted = heightPx / TV_DESIGN_HEIGHT_DP
                 if (heightPx > 0f && fitted < system.density) Density(fitted, fontScale = 1f) else system
             }
+            HideSystemBarsAgain()
             CompositionLocalProvider(LocalTouchUi provides true, LocalDensity provides density) {
-                content()
+                // Si el sistema saca sus barras (p.ej. con el gesto de atrás), la interfaz se aparta para que el menú de
+                // arriba no quede debajo de la barra de estado. La escala se calcula con el alto completo (arriba) para
+                // que no cambie el tamaño de todo mientras se ven.
+                Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                    content()
+                }
             }
         }
     }
@@ -153,3 +167,32 @@ fun Modifier.touchPullDown(enabled: Boolean, onPull: () -> Unit): Modifier = if 
 }
 
 private val SWIPE_THRESHOLD = 72.dp
+
+/** Tiempo que se dejan ver las barras del sistema antes de volver a esconderlas. */
+private const val SYSTEM_BARS_VISIBLE_MS = 2_000L
+
+/**
+ * HyperOS deja la barra de estado puesta tras el gesto de atrás aunque la ventana pida pantalla completa: se vuelve a
+ * esconder sola a los [SYSTEM_BARS_VISIBLE_MS].
+ */
+@Composable
+private fun HideSystemBarsAgain() {
+    val view = LocalView.current
+    val barsVisible = WindowInsets.systemBars.getTop(LocalDensity.current) > 0 ||
+        WindowInsets.systemBars.getBottom(LocalDensity.current) > 0
+    LaunchedEffect(barsVisible) {
+        if (!barsVisible) return@LaunchedEffect
+        delay(SYSTEM_BARS_VISIBLE_MS)
+        val window = view.context.findActivity()?.window ?: return@LaunchedEffect
+        WindowInsetsControllerCompat(window, view).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}

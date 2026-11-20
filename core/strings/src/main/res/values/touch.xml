@@ -3,4 +3,5 @@
 <resources>
     <string name="player_touch_brightness">Brightness %1$d %%</string>
     <string name="player_touch_volume">Volume %1$d %%</string>
+    <string name="player_touch_locked">Locked · press and hold the lock to unlock</string>
 </resources>

@@ -3,4 +3,5 @@
 <resources>
     <string name="player_touch_brightness">Brillo %1$d %%</string>
     <string name="player_touch_volume">Volumen %1$d %%</string>
+    <string name="player_touch_locked">Bloqueado · mantén pulsado el candado para desbloquear</string>
 </resources>

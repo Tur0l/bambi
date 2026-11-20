@@ -141,12 +141,15 @@ internal fun PlayerTouchButtons(
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onOpenTracks: () -> Unit,
+    onLock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
         Box(Modifier.fillMaxSize()) {
             TouchRoundButton(TouchIcons.Back, size = 44.dp, onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 22.dp))
             TouchRoundButton(TouchIcons.Subtitles, size = 44.dp, onClick = onOpenTracks, modifier = Modifier.align(Alignment.TopEnd).padding(end = 20.dp, top = 22.dp))
+            // Bloqueo infantil (PlayerLock.kt).
+            TouchRoundButton(AppIcons.Lock, size = 44.dp, onClick = onLock, modifier = Modifier.align(Alignment.TopEnd).padding(end = 76.dp, top = 22.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(56.dp),
                 verticalAlignment = Alignment.CenterVertically,
