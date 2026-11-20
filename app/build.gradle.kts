@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+import java.util.Base64
 import java.util.Properties
 
 val localProps = Properties().apply {
@@ -29,6 +30,14 @@ val rdToken: String = seed("rdToken")
 val subdlApiKey: String = seed("subdlApiKey")
 val tmdbApiKey: String = seed("tmdbApiKey")
 val allDebridKey: String = seed("allDebridKey")
+// Cualquier secreto del almacén de la app («secret.<nombre>=valor» en el seedFile): addons, otros debrid… Va en base64
+// para no tener que escapar URLs dentro del BuildConfig.
+val seedSecrets: String = seedFileProps?.let { props ->
+    props.stringPropertyNames().filter { it.startsWith("secret.") }.sorted()
+        .joinToString("\n") { "${it.removePrefix("secret.")}=${props.getProperty(it).trim()}" }
+        .takeIf { it.isNotEmpty() }
+        ?.let { Base64.getEncoder().encodeToString(it.toByteArray()) }
+} ?: ""
 val seedDebrid: String = seed("seedDebrid")
 val traktClientId: String = localProps.getProperty("traktClientId")?.trim() ?: ""
 val traktClientSecret: String = privateProp("traktClientSecret")
@@ -54,6 +63,7 @@ android {
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "ALLDEBRID_KEY", "\"$allDebridKey\"")
         buildConfigField("String", "SEED_DEBRID", "\"$seedDebrid\"")
+        buildConfigField("String", "SEED_SECRETS", "\"$seedSecrets\"")
         buildConfigField("String", "TRAKT_CLIENT_ID", "\"$traktClientId\"")
         buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"$traktClientSecret\"")
         buildConfigField("String", "TRAKT_REDIRECT_URI", "\"$traktRedirectUri\"")

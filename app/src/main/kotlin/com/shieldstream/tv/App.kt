@@ -56,6 +56,7 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
         // Fork táctil: APK preconfigurada (-PseedFile): clave de AllDebrid y servicio debrid elegido, una sola vez.
         tokenStore.seedOnce(TokenStore.keyNameFor(ApiService.ALLDEBRID), BuildConfig.ALLDEBRID_KEY)
         seedDebridChoice(BuildConfig.SEED_DEBRID)
+        seedSecrets(BuildConfig.SEED_SECRETS)
         // Solo en Bambi Pruebas: si no hay ningún addon, se deja preconfigurado Torrentio (código abierto) limitado
         // a las webs españolas, para tener una sección solo con fuentes en castellano. Se quita desde Ajustes → Addons.
         if (BuildConfig.DEBUG) {
@@ -68,6 +69,15 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
             episodeTracking.notificationsEnabled.collect { enabled ->
                 EpisodeNotificationScheduler.sync(this@App, enabled)
             }
+        }
+    }
+
+    /** APK preconfigurada: el resto de secretos («nombre=valor» por línea, en base64), cada uno una sola vez. */
+    private fun seedSecrets(blob: String) {
+        if (blob.isBlank()) return
+        String(android.util.Base64.decode(blob, android.util.Base64.DEFAULT)).lineSequence().forEach { line ->
+            val i = line.indexOf('=')
+            if (i > 0) tokenStore.seedOnce(line.substring(0, i), line.substring(i + 1))
         }
     }
 
