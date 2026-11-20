@@ -19,6 +19,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.View
+import android.media.AudioManager
+import android.view.WindowManager
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.pointerInput
+import com.shieldstream.tv.ui.touch.LocalTouchUi
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -224,6 +232,84 @@ fun PlayerScreen(
     fun showControls() {
         controlsVisible = true
         interactions++
+    }
+
+    // --- Fork táctil: gestos y botones del móvil (PlayerTouch.kt). En la tele touchUi = false y no se usa nada. ---
+    val touchUi = LocalTouchUi.current
+    val touchActivity = remember(context) { context.findActivity() }
+    val audio = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    var touchVolume by remember { mutableFloatStateOf(-1f) }
+    var touchBrightness by remember { mutableFloatStateOf(-1f) }
+    // El brillo que se pone con el dedo es solo para el reproductor: al salir vuelve el del sistema.
+    DisposableEffect(touchActivity) {
+        onDispose {
+            touchActivity?.window?.let { w ->
+                w.attributes = w.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+            }
+        }
+    }
+
+    fun touchPlayPause() {
+        val p = player ?: return
+        if (p.isPlaying) p.pause() else p.play()
+        showControls()
+    }
+
+    fun touchSeekBy(stepMs: Long) {
+        val p = player ?: return
+        val duration = p.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        p.seekTo((p.currentPosition + stepMs).coerceIn(0L, duration))
+        seekFeedback = if (stepMs < 0) "« ${-stepMs / 1000} s" else "${stepMs / 1000} s »"
+        showControls()
+    }
+
+    fun touchScrubStart() {
+        val p = player ?: return
+        if (scrubMs == null) {
+            resumeAfterScrub = p.isPlaying
+            p.pause()
+            scrubMs = p.currentPosition
+        }
+        showControls()
+    }
+
+    fun touchScrubTo(targetMs: Long) {
+        val p = player ?: return
+        val duration = p.duration.takeIf { it > 0 } ?: return
+        if (scrubMs == null) touchScrubStart()
+        scrubMs = targetMs.coerceIn(0L, duration)
+        showControls()
+    }
+
+    fun touchScrubEnd() {
+        val target = scrubMs ?: return
+        player?.seekTo(target)
+        if (resumeAfterScrub) player?.play()
+        scrubMs = null
+        showControls()
+    }
+
+    fun touchAdjustBrightness(delta: Float) {
+        val w = touchActivity?.window ?: return
+        if (touchBrightness < 0f) {
+            touchBrightness = w.attributes.screenBrightness.takeIf { it >= 0f } ?: run {
+                val raw = runCatching {
+                    android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS)
+                }.getOrDefault(128)
+                if (raw in 0..255) raw / 255f else 0.5f
+            }
+        }
+        touchBrightness = (touchBrightness + delta).coerceIn(0.01f, 1f)
+        w.attributes = w.attributes.apply { screenBrightness = touchBrightness }
+        seekFeedback = texts.get(StringsR.string.player_touch_brightness, (touchBrightness * 100).toInt())
+    }
+
+    fun touchAdjustVolume(delta: Float) {
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        if (touchVolume < 0f) touchVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max.toFloat()
+        touchVolume = (touchVolume + delta).coerceIn(0f, 1f)
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(touchVolume * max), 0)
+        seekFeedback = texts.get(StringsR.string.player_touch_volume, Math.round(touchVolume * 100))
     }
 
     LaunchedEffect(controlsVisible, interactions, playback.isPlaying) {
@@ -446,6 +532,37 @@ fun PlayerScreen(
             activeExternal?.let { ExternalSubtitleOverlay(exoPlayer, it, subtitleTiming, subtitleAppearance) }
         }
 
+        if (touchUi && state == PlayerUiState.Playing && !syncOpen) {
+            PlayerTouchGestures(
+                onTap = {
+                    when {
+                        tracksOpen -> tracksOpen = false
+                        controlsVisible -> controlsVisible = false
+                        else -> showControls()
+                    }
+                },
+                onDoubleTap = { zone ->
+                    when (zone) {
+                        TouchZone.LEFT -> touchSeekBy(-TOUCH_SEEK_STEP_MS)
+                        TouchZone.RIGHT -> touchSeekBy(TOUCH_SEEK_STEP_MS)
+                        TouchZone.CENTER -> touchPlayPause()
+                    }
+                },
+                onScrubStart = ::touchScrubStart,
+                onScrub = { fraction ->
+                    scrubMs?.let { from -> touchScrubTo(from + (fraction * TOUCH_SCRUB_FULL_WIDTH_MS).toLong()) }
+                },
+                onScrubEnd = ::touchScrubEnd,
+                onBrightness = ::touchAdjustBrightness,
+                onVolume = ::touchAdjustVolume,
+                onAdjustEnd = {
+                    touchVolume = -1f
+                    touchBrightness = -1f
+                },
+                onPinch = { zoomIn -> viewModel.setVideoFit(if (zoomIn) com.shieldstream.tv.model.VideoFit.ZOOM else com.shieldstream.tv.model.VideoFit.FIT) },
+            )
+        }
+
         if (state == PlayerUiState.Playing) {
             AnimatedVisibility(visible = controlsVisible && !syncOpen, enter = fadeIn(), exit = fadeOut()) {
                 ControlsOverlay(
@@ -455,6 +572,27 @@ fun PlayerScreen(
                     scrubMs = scrubMs,
                     thumbs = thumbs,
                     thumbnailsEnabled = thumbnailsEnabled,
+                    touch = touchUi,
+                    onTouchSeek = { fraction, done ->
+                        val duration = playback.durationMs
+                        // fraction < 0 = el dedo se ha soltado: se salta a donde estaba.
+                        if (duration > 0 && fraction >= 0f) touchScrubTo((fraction * duration).toLong())
+                        if (done) touchScrubEnd()
+                    },
+                )
+            }
+            if (touchUi) {
+                PlayerTouchButtons(
+                    visible = controlsVisible && !syncOpen && !tracksOpen && scrubMs == null,
+                    isPlaying = playback.isPlaying,
+                    onBack = onBack,
+                    onPlayPause = ::touchPlayPause,
+                    onSeekBack = { touchSeekBy(-TOUCH_SEEK_STEP_MS) },
+                    onSeekForward = { touchSeekBy(TOUCH_SEEK_STEP_MS) },
+                    onOpenTracks = {
+                        controlsVisible = false
+                        tracksOpen = true
+                    },
                 )
             }
             seekFeedback?.let {
@@ -529,11 +667,14 @@ fun PlayerScreen(
             (nextUp as? NextUpUiState.Showing)?.let { next ->
                 val target = if (next.secondsLeft <= NEXT_FILL_SECONDS) 1f - next.secondsLeft / NEXT_FILL_SECONDS.toFloat() else 0f
                 val fill by animateFloatAsState(target, animationSpec = tween(500, easing = LinearEasing), label = "nextFill")
-                PlayerPill(localizedStringResource(StringsR.string.player_next_episode), AppIcons.SkipNext, fill, pillModifier)
+                PlayerPill(
+                    localizedStringResource(StringsR.string.player_next_episode), AppIcons.SkipNext, fill,
+                    if (touchUi) pillModifier.clickable { viewModel.playNextNow() } else pillModifier,
+                )
             }
             if (skipVisible) {
                 (skipPrompt as? SkipPromptUiState.Showing)?.let { skip ->
-                    PlayerPill(skip.label, AppIcons.FastForward, null, pillModifier)
+                    PlayerPill(skip.label, AppIcons.FastForward, null, if (touchUi) pillModifier.clickable { viewModel.skipSegment() } else pillModifier)
                 }
             }
         }
@@ -618,6 +759,8 @@ private fun ControlsOverlay(
     scrubMs: Long?,
     thumbs: SeekThumbnails?,
     thumbnailsEnabled: Boolean,
+    touch: Boolean = false,
+    onTouchSeek: (fraction: Float, done: Boolean) -> Unit = { _, _ -> },
 ) {
     val shownMs = scrubMs ?: playback.positionMs
     Box(Modifier.fillMaxSize()) {
@@ -628,7 +771,8 @@ private fun ControlsOverlay(
                 .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent))),
         )
         Column(
-            Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 28.dp, end = 48.dp),
+            // Con el dedo, a los lados del título van los botones de volver y de audio/subtítulos.
+            Modifier.align(Alignment.TopStart).padding(start = if (touch) 72.dp else 48.dp, top = 28.dp, end = if (touch) 80.dp else 48.dp),
         ) {
             Text(
                 text = title,
@@ -654,7 +798,7 @@ private fun ControlsOverlay(
                 SeekThumbnailStrip(thumbs = thumbs, targetMs = scrubMs, durationMs = playback.durationMs)
                 Spacer(Modifier.height(18.dp))
             }
-            SeekBar(playback, shownMs)
+            if (touch) TouchSeekArea(onTouchSeek) { SeekBar(playback, shownMs) } else SeekBar(playback, shownMs)
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -670,7 +814,8 @@ private fun ControlsOverlay(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
+                // Las ayudas del mando (OK, flechas) no valen con el dedo.
+                if (!touch) Text(
                     text = when {
                         scrubMs != null -> localizedStringResource(StringsR.string.player_ok_jump_here_back_return)
                         thumbnailsEnabled -> localizedStringResource(StringsR.string.player_ok_pause_seek_audio_subtitles)
@@ -748,6 +893,31 @@ private fun StatusOverlay(title: String, message: String, loading: Boolean) {
             Spacer(Modifier.height(16.dp))
             Text(localizedStringResource(StringsR.string.player_press_back_to_pick_another_source), color = Color(0xFFB3B3B3), style = MaterialTheme.typography.bodyMedium)
         }
+    }
+}
+
+@Composable
+private fun TouchSeekArea(onSeek: (fraction: Float, done: Boolean) -> Unit, bar: @Composable () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures { at -> onSeek((at.x / size.width).coerceIn(0f, 1f), true) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { at -> onSeek((at.x / size.width).coerceIn(0f, 1f), false) },
+                    onDragEnd = { onSeek(-1f, true) },
+                    onDragCancel = { onSeek(-1f, true) },
+                ) { change, _ ->
+                    change.consume()
+                    onSeek((change.position.x / size.width).coerceIn(0f, 1f), false)
+                }
+            }
+            .padding(vertical = 14.dp),
+    ) {
+        bar()
     }
 }
 

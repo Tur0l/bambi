@@ -166,6 +166,11 @@ class PlayerViewModel @Inject constructor(
         val next = videoFit.value.next()
         viewModelScope.launch { settings.setVideoFit(next) }
     }
+
+    /** Fork táctil: el pellizco pide un formato concreto (abrir = sin bandas, cerrar = imagen completa). */
+    fun setVideoFit(fit: com.shieldstream.tv.model.VideoFit) {
+        if (videoFit.value != fit) viewModelScope.launch { settings.setVideoFit(fit) }
+    }
     private val autoSkipIntro: StateFlow<Boolean> = settings.autoSkipIntro.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // --- Castellano de verdad ---------------------------------------------------------------------------

@@ -24,7 +24,8 @@ object AppModule {
         AppVersion(
             name = BuildConfig.VERSION_NAME,
             isDebug = BuildConfig.DEBUG || BuildConfig.APPLICATION_ID.endsWith(".debug"),
-            updateRepo = "grodri99/bambi",
+            // Fork táctil: las actualizaciones salen de las Releases del fork (el APK de la tele va firmado con otra clave).
+            updateRepo = "Tur0l/bambi",
         )
 
     @Provides

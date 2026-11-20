@@ -84,6 +84,7 @@ import com.shieldstream.tv.ui.component.TvButton
 import com.shieldstream.tv.ui.component.onBackKey
 import com.shieldstream.tv.ui.component.tvClickable
 import com.shieldstream.tv.ui.theme.DisplayFont
+import com.shieldstream.tv.ui.touch.LocalTouchUi
 
 private val Background = Brush.verticalGradient(listOf(Color(0xFF151622), Color.Black))
 private val Panel = Color(0xFF1A1C27)
@@ -651,6 +652,7 @@ private fun KeyField(
     upRequester: FocusRequester? = null,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
+    val touchUi = LocalTouchUi.current
     var focused by remember { mutableStateOf(false) }
     var pressedHere by remember { mutableStateOf(false) }
     BasicTextField(
@@ -664,7 +666,7 @@ private fun KeyField(
             autoCorrectEnabled = false,
             keyboardType = KeyboardType.Password,
             imeAction = ImeAction.Done,
-            showKeyboardOnFocus = false,
+            showKeyboardOnFocus = touchUi, // móvil: el teclado sale al tocar (no hay OK de mando)
         ),
         keyboardActions = KeyboardActions(onDone = {
             keyboard?.hide()

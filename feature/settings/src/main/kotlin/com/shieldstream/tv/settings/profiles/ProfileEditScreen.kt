@@ -65,6 +65,7 @@ import com.shieldstream.tv.ui.component.AppIcons
 import com.shieldstream.tv.ui.component.ProfileAvatar
 import com.shieldstream.tv.ui.component.TvButton
 import com.shieldstream.tv.ui.component.tvClickable
+import com.shieldstream.tv.ui.touch.LocalTouchUi
 
 @Composable
 fun ProfileEditScreen(
@@ -321,6 +322,7 @@ fun ProfileEditScreen(
 @Composable
 private fun NameField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
     val keyboard = LocalSoftwareKeyboardController.current
+    val touchUi = LocalTouchUi.current
     val focusManager = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
     var pressedHere by remember { mutableStateOf(false) }
@@ -334,7 +336,7 @@ private fun NameField(value: String, onValueChange: (String) -> Unit, modifier: 
             capitalization = KeyboardCapitalization.Words,
             keyboardType = KeyboardType.Text,
             imeAction = ImeAction.Done,
-            showKeyboardOnFocus = false,
+            showKeyboardOnFocus = touchUi, // móvil: el teclado sale al tocar (no hay OK de mando)
         ),
         keyboardActions = KeyboardActions(onDone = {
             keyboard?.hide()

@@ -23,6 +23,8 @@ import com.shieldstream.tv.ui.theme.LocalLightweightUi
 import com.shieldstream.tv.ui.theme.LocalSoftBackdrops
 import com.shieldstream.tv.ui.theme.LocalHighResBackdrops
 import com.shieldstream.tv.ui.theme.ShieldStreamTheme
+import com.shieldstream.tv.ui.touch.ProvideTouchUi
+import com.shieldstream.tv.ui.touch.isTouchFirstDevice
 import com.shieldstream.tv.watchnext.WatchNextManager
 import com.shieldstream.tv.watchnext.WatchNextRequest
 import com.shieldstream.tv.watchnext.parseWatchNextRequest
@@ -38,6 +40,9 @@ class MainActivity : ComponentActivity() {
     /** Intro al volver a la app desde segundo plano (no en el arranque, que ya empieza con ella). */
     private val resumeIntro = MutableStateFlow<ResumeIntro?>(null)
     private var stoppedAt = 0L
+
+    /** Móvil o tableta (fork táctil): ver ProvideTouchUi. */
+    private var touchUi = false
 
     @Inject
     lateinit var holder: SelectedContentHolder
@@ -66,6 +71,8 @@ class MainActivity : ComponentActivity() {
         }
         AppColors.applyTheme(profiles.active.value.theme)
         StartupTrace.mark("Activity tema")
+        touchUi = isTouchFirstDevice()
+        if (touchUi) TouchWindow.enterImmersive(window)
         setContent {
             StartupTrace.mark("primera composición")
             val activeProfile by profiles.active.collectAsState()
@@ -79,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 LocalHighResBackdrops provides highResBackdrops,
             ) {
                 ShieldStreamTheme {
+                    ProvideTouchUi(enabled = touchUi) {
                     AppNavHost(
                         holder = holder,
                         onExit = { finish() },
@@ -91,6 +99,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                     )
+                    }
                 }
             }
         }
@@ -103,6 +112,12 @@ class MainActivity : ComponentActivity() {
         val gate = IntroKeyGate.onKey ?: return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_UP) gate()
         return true
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Al volver de otra app o de un diálogo del sistema, el móvil puede devolver las barras: se vuelven a ocultar.
+        if (hasFocus && touchUi) TouchWindow.enterImmersive(window)
     }
 
     override fun onStop() {
