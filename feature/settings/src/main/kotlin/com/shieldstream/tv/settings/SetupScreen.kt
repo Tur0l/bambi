@@ -787,10 +787,14 @@ private fun ColumnScope.DoneStep(state: SetupUiState.Ready, onFinish: () -> Unit
         withFrameNanos { }
         runCatching { requester.requestFocus() }
     }
+    // Fork táctil: con 6 filas de resumen el botón queda por debajo del borde. En la tele no se nota (el foco va
+    // solo al botón y el OK funciona aunque no se vea); con el dedo hay que poder deslizar hasta él.
+    val touchUi = LocalTouchUi.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxWidth().weight(1f),
+        modifier = Modifier.fillMaxWidth().weight(1f)
+            .then(if (touchUi) Modifier.verticalScroll(rememberScrollState()) else Modifier),
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(84.dp).background(Green, CircleShape)) {
             Text("✓", color = Color.Black, fontSize = 44.sp, fontWeight = FontWeight.Bold)
