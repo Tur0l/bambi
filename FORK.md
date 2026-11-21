@@ -28,6 +28,13 @@ pantalla táctil que no son una tele. En una tele o caja Android TV la app se co
 - Se instala como **Bambi Táctil** (`com.shieldstream.tv.tactil`), al lado del Bambi original si se quiere.
 - Las actualizaciones automáticas salen de las Releases de este fork.
 
+## Instalar
+
+- **Móvil:** descarga `Bambi.apk` de la [última versión](https://github.com/Tur0l/bambi/releases/latest) y ábrelo.
+- **Android TV / Shield:** en la app *Downloader*, escribe el código **`1081835`** (lleva siempre a la última versión:
+  `https://github.com/Tur0l/bambi/releases/latest/download/Bambi.apk`).
+- Después se actualiza sola: *Ajustes → Buscar actualizaciones*.
+
 ## Versiones
 
 `1.0.8.1` = la 1.0.8 de grodri99 + la revisión 1 del fork. Al traer una versión nueva del original se pasa a
