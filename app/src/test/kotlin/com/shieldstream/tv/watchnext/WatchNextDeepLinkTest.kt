@@ -17,7 +17,7 @@ class WatchNextDeepLinkTest {
 
     @Test
     fun `parses a movie resume request`() {
-        val request = parse("bambitactil://resume/movie/603?profile=kids")
+        val request = parse("shieldstream://resume/movie/603?profile=kids")
 
         assertEquals(MediaType.MOVIE, request?.type)
         assertEquals("603", request?.mediaId)
@@ -27,7 +27,7 @@ class WatchNextDeepLinkTest {
 
     @Test
     fun `parses an episode resume request`() {
-        val request = parse("bambitactil://resume/tv/1399?profile=default&season=2&episode=7")
+        val request = parse("shieldstream://resume/tv/1399?profile=default&season=2&episode=7")
 
         assertEquals(MediaType.TV, request?.type)
         assertEquals("1399", request?.mediaId)
@@ -36,26 +36,26 @@ class WatchNextDeepLinkTest {
 
     @Test
     fun `rejects a different host`() {
-        assertNull(parse("bambitactil://details/movie/603?profile=default"))
+        assertNull(parse("shieldstream://details/movie/603?profile=default"))
     }
 
     @Test
     fun `rejects a missing profile`() {
-        assertNull(parse("bambitactil://resume/movie/603"))
+        assertNull(parse("shieldstream://resume/movie/603"))
     }
 
     @Test
     fun `rejects an episode without a complete valid target`() {
-        assertNull(parse("bambitactil://resume/tv/1399?profile=default&season=2"))
-        assertNull(parse("bambitactil://resume/tv/1399?profile=default&season=-1&episode=7"))
-        assertNull(parse("bambitactil://resume/tv/1399?profile=default&season=2&episode=0"))
+        assertNull(parse("shieldstream://resume/tv/1399?profile=default&season=2"))
+        assertNull(parse("shieldstream://resume/tv/1399?profile=default&season=-1&episode=7"))
+        assertNull(parse("shieldstream://resume/tv/1399?profile=default&season=2&episode=0"))
     }
 
     @Test
     fun `rejects intents that are not view actions`() {
         val intent = Intent(
             Intent.ACTION_MAIN,
-            Uri.parse("bambitactil://resume/movie/603?profile=default"),
+            Uri.parse("shieldstream://resume/movie/603?profile=default"),
         )
 
         assertNull(parseWatchNextRequest(intent))

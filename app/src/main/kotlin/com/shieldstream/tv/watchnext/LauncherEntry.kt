@@ -13,7 +13,7 @@ internal data class LauncherEntry(
         get() = launcherInternalId(profileId, entry)
 
     fun deepLink(): Uri = Uri.Builder()
-        .scheme(WATCH_NEXT_SCHEME)
+        .scheme("shieldstream")
         .authority("resume")
         .appendPath(item.type.name.lowercase())
         .appendPath(item.id)

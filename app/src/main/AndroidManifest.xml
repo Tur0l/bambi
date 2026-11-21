@@ -62,7 +62,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="bambitactil"
+                    android:scheme="shieldstream"
                     android:host="resume" />
             </intent-filter>
         </activity>
