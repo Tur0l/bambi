@@ -50,13 +50,15 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
         ) ?: AppLanguage.default()
         super.onCreate()
         StartupTrace.mark("App inyectada")
+        // Fork táctil: los secretos de la APK preconfigurada van PRIMERO. seedOnce marca la clave como sembrada aunque el
+        // valor venga vacío, así que si fueran después (tmdb_key, subdl_key, alldebrid_key) ya no entrarían.
+        seedSecrets(BuildConfig.SEED_SECRETS)
         tokenStore.seedOnce(TokenStore.RD_TOKEN, BuildConfig.RD_TOKEN)
         tokenStore.seedOnce(TokenStore.TMDB_KEY, BuildConfig.TMDB_API_KEY)
         tokenStore.seedOnce(TokenStore.SUBDL_KEY, BuildConfig.SUBDL_API_KEY)
         // Fork táctil: APK preconfigurada (-PseedFile): clave de AllDebrid y servicio debrid elegido, una sola vez.
         tokenStore.seedOnce(TokenStore.keyNameFor(ApiService.ALLDEBRID), BuildConfig.ALLDEBRID_KEY)
         seedDebridChoice(BuildConfig.SEED_DEBRID)
-        seedSecrets(BuildConfig.SEED_SECRETS)
         // Solo en Bambi Pruebas: si no hay ningún addon, se deja preconfigurado Torrentio (código abierto) limitado
         // a las webs españolas, para tener una sección solo con fuentes en castellano. Se quita desde Ajustes → Addons.
         if (BuildConfig.DEBUG) {
