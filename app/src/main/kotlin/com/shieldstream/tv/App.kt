@@ -61,9 +61,8 @@ class App : Application(), ImageLoaderFactory, Configuration.Provider {
         seedDebridChoice(BuildConfig.SEED_DEBRID)
         // Solo en Bambi Pruebas: si no hay ningún addon, se deja preconfigurado Torrentio (código abierto) limitado
         // a las webs españolas, para tener una sección solo con fuentes en castellano. Se quita desde Ajustes → Addons.
-        if (BuildConfig.DEBUG) {
-            tokenStore.seedOnce(TokenStore.keyNameFor(ApiService.AIOSTREAMS), DEBUG_SPANISH_ADDON)
-        }
+        // Fork táctil: también en la versión normal (en upstream solo en Bambi Pruebas). Solo si no hay ningún addon.
+        tokenStore.seedOnce(TokenStore.keyNameFor(ApiService.AIOSTREAMS), DEBUG_SPANISH_ADDON)
         StartupTrace.mark("App claves")
         watchNext.start()
         StartupTrace.mark("App watchNext")
