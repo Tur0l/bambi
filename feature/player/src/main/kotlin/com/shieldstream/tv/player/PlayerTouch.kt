@@ -344,19 +344,21 @@ internal class PlayerTouch(val enabled: Boolean, context: Context, private val t
         if (done) scrubEnd()
     }
 
+    /** [brightness] es la posición percibida (como la barra de brillo de Android); a la ventana va en lineal. */
     private fun adjustBrightness(delta: Float) {
         val w = activity?.window ?: return
         if (brightness < 0f) {
-            brightness = w.attributes.screenBrightness.takeIf { it >= 0f } ?: run {
+            val linear = w.attributes.screenBrightness.takeIf { it >= 0f } ?: run {
                 val raw = runCatching {
                     android.provider.Settings.System.getInt(w.context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS)
                 }.getOrDefault(128)
-                if (raw in 0..255) raw / 255f else 0.5f
+                if (raw in 0..255) raw / 255f else BrightnessCurve.toLinear(0.5f)
             }
+            brightness = BrightnessCurve.toGamma(linear)
         }
-        brightness = (brightness + delta).coerceIn(0.01f, 1f)
-        w.attributes = w.attributes.apply { screenBrightness = brightness }
-        bridge.feedback(texts.get(StringsR.string.player_touch_brightness, (brightness * 100).toInt()))
+        brightness = (brightness + delta).coerceIn(0.02f, 1f)
+        w.attributes = w.attributes.apply { screenBrightness = BrightnessCurve.toLinear(brightness) }
+        bridge.feedback(texts.get(StringsR.string.player_touch_brightness, Math.round(brightness * 100)))
     }
 
     private fun adjustVolume(delta: Float) {
@@ -444,6 +446,28 @@ internal class PlayerTouch(val enabled: Boolean, context: Context, private val t
                 bridge.showControls()
             },
         )
+    }
+}
+
+/**
+ * Curva de la barra de brillo de Android (BrightnessUtils de AOSP, curva HLG): posición percibida 0..1 ↔ brillo lineal
+ * 0..1, que es lo que admite la ventana. En lineal, hacia el 25 % ya se ve casi a tope y el resto del gesto no se nota.
+ */
+private object BrightnessCurve {
+    private const val R = 0.5f
+    private const val A = 0.17883277f
+    private const val B = 0.28466892f
+    private const val C = 0.55991073f
+
+    fun toLinear(gamma: Float): Float {
+        val ret = if (gamma <= R) (gamma / R) * (gamma / R) else kotlin.math.exp((gamma - C) / A) + B
+        return (ret / 12f).coerceIn(0f, 1f)
+    }
+
+    fun toGamma(linear: Float): Float {
+        val ret = linear * 12f
+        val gamma = if (ret <= 1f) R * kotlin.math.sqrt(ret) else A * kotlin.math.ln(ret - B) + C
+        return gamma.coerceIn(0f, 1f)
     }
 }
 
