@@ -1,5 +1,31 @@
 package com.shieldstream.tv.player
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.media.AudioManager
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.exoplayer.ExoPlayer
+import com.shieldstream.tv.model.VideoFit
+import com.shieldstream.tv.strings.R as StringsR
+import com.shieldstream.tv.strings.Texts
+import com.shieldstream.tv.strings.rememberTexts
+import com.shieldstream.tv.ui.touch.LocalTouchUi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -207,4 +233,248 @@ private object TouchIcons {
         ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
             .addPath(pathData = addPathNodes(path), fill = SolidColor(Color.White))
             .build()
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Enganche con PlayerScreen. El estado del reproductor (búsqueda, controles, panel de pistas…) vive en PlayerScreen;
+// aquí solo se lee y se cambia a través de PlayerTouchBridge. Así PlayerScreen (que upstream toca a menudo) solo
+// lleva unas pocas líneas del fork y traer versiones nuevas del original da pocos conflictos.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Lo que PlayerScreen comparte con la capa táctil. */
+internal class PlayerTouchBridge(
+    val player: () -> ExoPlayer?,
+    val scrubMs: () -> Long?,
+    val setScrubMs: (Long?) -> Unit,
+    val resumeAfterScrub: () -> Boolean,
+    val setResumeAfterScrub: (Boolean) -> Unit,
+    val controlsVisible: () -> Boolean,
+    val setControlsVisible: (Boolean) -> Unit,
+    val showControls: () -> Unit,
+    val tracksOpen: () -> Boolean,
+    val setTracksOpen: (Boolean) -> Unit,
+    val syncOpen: () -> Boolean,
+    val feedback: (String) -> Unit,
+    val focusPlayer: () -> Unit,
+    val onBack: () -> Unit,
+    val setVideoFit: (VideoFit) -> Unit,
+)
+
+@Composable
+internal fun rememberPlayerTouch(bridge: PlayerTouchBridge): PlayerTouch {
+    val enabled = LocalTouchUi.current
+    val context = LocalContext.current
+    val texts = rememberTexts()
+    val touch = remember(context, texts) { PlayerTouch(enabled, context, texts) }
+    touch.bridge = bridge
+    val childLock by PlayerChildLock.locked.collectAsStateWithLifecycle()
+    touch.locked = enabled && childLock
+    // Bloqueado, el gesto de atrás no cierra la película: solo enseña el candado.
+    BackHandler(enabled = touch.locked) { touch.lockHint++ }
+    // El brillo que se pone con el dedo es solo para el reproductor: al salir vuelve el del sistema.
+    DisposableEffect(touch) { onDispose { touch.restoreBrightness() } }
+    return touch
+}
+
+/** Gestos, botones y candado del reproductor en el móvil. Con [enabled] = false (la tele) no hace nada. */
+@Stable
+internal class PlayerTouch(val enabled: Boolean, context: Context, private val texts: Texts) {
+    lateinit var bridge: PlayerTouchBridge
+    var locked by mutableStateOf(false)
+    var lockHint by mutableIntStateOf(0)
+    private val activity = context.findActivity()
+    private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var volume = -1f
+    private var brightness = -1f
+
+    /** Bloqueo infantil: se tragan todas las teclas, también Atrás y los botones físicos de volumen. */
+    fun consumesKey(event: KeyEvent): Boolean {
+        if (!locked) return false
+        if (event.type == KeyEventType.KeyDown) lockHint++
+        return true
+    }
+
+    fun tappable(modifier: Modifier, onTap: () -> Unit): Modifier = if (enabled) modifier.clickable(onClick = onTap) else modifier
+
+    private fun playPause() {
+        val p = bridge.player() ?: return
+        if (p.isPlaying) p.pause() else p.play()
+        bridge.showControls()
+    }
+
+    private fun seekBy(stepMs: Long) {
+        val p = bridge.player() ?: return
+        val duration = p.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+        p.seekTo((p.currentPosition + stepMs).coerceIn(0L, duration))
+        bridge.feedback(if (stepMs < 0) "« ${-stepMs / 1000} s" else "${stepMs / 1000} s »")
+        bridge.showControls()
+    }
+
+    private fun scrubStart() {
+        val p = bridge.player() ?: return
+        if (bridge.scrubMs() == null) {
+            bridge.setResumeAfterScrub(p.isPlaying)
+            p.pause()
+            bridge.setScrubMs(p.currentPosition)
+        }
+        bridge.showControls()
+    }
+
+    private fun scrubTo(targetMs: Long) {
+        val p = bridge.player() ?: return
+        val duration = p.duration.takeIf { it > 0 } ?: return
+        if (bridge.scrubMs() == null) scrubStart()
+        bridge.setScrubMs(targetMs.coerceIn(0L, duration))
+        bridge.showControls()
+    }
+
+    private fun scrubEnd() {
+        val target = bridge.scrubMs() ?: return
+        val p = bridge.player()
+        p?.seekTo(target)
+        if (bridge.resumeAfterScrub()) p?.play()
+        bridge.setScrubMs(null)
+        bridge.showControls()
+    }
+
+    /** Barra de progreso: [fraction] de la duración; < 0 = el dedo se ha soltado y se salta a donde estaba. */
+    fun seekBarSeek(fraction: Float, done: Boolean) {
+        val duration = bridge.player()?.duration?.takeIf { it > 0 }
+        if (duration != null && fraction >= 0f) scrubTo((fraction * duration).toLong())
+        if (done) scrubEnd()
+    }
+
+    private fun adjustBrightness(delta: Float) {
+        val w = activity?.window ?: return
+        if (brightness < 0f) {
+            brightness = w.attributes.screenBrightness.takeIf { it >= 0f } ?: run {
+                val raw = runCatching {
+                    android.provider.Settings.System.getInt(w.context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS)
+                }.getOrDefault(128)
+                if (raw in 0..255) raw / 255f else 0.5f
+            }
+        }
+        brightness = (brightness + delta).coerceIn(0.01f, 1f)
+        w.attributes = w.attributes.apply { screenBrightness = brightness }
+        bridge.feedback(texts.get(StringsR.string.player_touch_brightness, (brightness * 100).toInt()))
+    }
+
+    private fun adjustVolume(delta: Float) {
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        if (volume < 0f) volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC) / max.toFloat()
+        volume = (volume + delta).coerceIn(0f, 1f)
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(volume * max), 0)
+        bridge.feedback(texts.get(StringsR.string.player_touch_volume, Math.round(volume * 100)))
+    }
+
+    fun restoreBrightness() {
+        activity?.window?.let { w ->
+            w.attributes = w.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+        }
+    }
+
+    private fun lock() {
+        PlayerChildLock.locked.value = true
+        bridge.setControlsVisible(false)
+        bridge.setTracksOpen(false)
+        lockHint++
+        // Con el foco en el reproductor, los botones de volumen pasan por consumesKey y se bloquean.
+        bridge.focusPlayer()
+    }
+
+    /** Capa de gestos: va DEBAJO de los controles (que recogen sus propios toques) y encima del vídeo. */
+    @Composable
+    fun Gestures(active: Boolean) {
+        if (!enabled || !active || locked || bridge.syncOpen()) return
+        PlayerTouchGestures(
+            onTap = {
+                when {
+                    bridge.tracksOpen() -> bridge.setTracksOpen(false)
+                    bridge.controlsVisible() -> bridge.setControlsVisible(false)
+                    else -> bridge.showControls()
+                }
+            },
+            onDoubleTap = { zone ->
+                when (zone) {
+                    TouchZone.LEFT -> seekBy(-TOUCH_SEEK_STEP_MS)
+                    TouchZone.RIGHT -> seekBy(TOUCH_SEEK_STEP_MS)
+                    TouchZone.CENTER -> playPause()
+                }
+            },
+            onScrubStart = ::scrubStart,
+            onScrub = { fraction -> bridge.scrubMs()?.let { from -> scrubTo(from + (fraction * TOUCH_SCRUB_FULL_WIDTH_MS).toLong()) } },
+            onScrubEnd = ::scrubEnd,
+            onBrightness = ::adjustBrightness,
+            onVolume = ::adjustVolume,
+            onAdjustEnd = {
+                volume = -1f
+                brightness = -1f
+            },
+            onPinch = { zoomIn -> bridge.setVideoFit(if (zoomIn) VideoFit.ZOOM else VideoFit.FIT) },
+        )
+    }
+
+    /** Botones de volver, ±10 s, pausa, pistas y candado: encima de los controles. */
+    @Composable
+    fun Buttons(isPlaying: Boolean) {
+        if (!enabled) return
+        PlayerTouchButtons(
+            visible = bridge.controlsVisible() && !bridge.syncOpen() && !bridge.tracksOpen() && bridge.scrubMs() == null && !locked,
+            isPlaying = isPlaying,
+            onBack = bridge.onBack,
+            onPlayPause = ::playPause,
+            onSeekBack = { seekBy(-TOUCH_SEEK_STEP_MS) },
+            onSeekForward = { seekBy(TOUCH_SEEK_STEP_MS) },
+            onOpenTracks = {
+                bridge.setControlsVisible(false)
+                bridge.setTracksOpen(true)
+            },
+            onLock = ::lock,
+        )
+    }
+
+    /** Candado del bloqueo infantil: encima de TODO el reproductor. */
+    @Composable
+    fun LockOverlay() {
+        if (!locked) return
+        PlayerLockOverlay(
+            hint = lockHint,
+            onUnlock = {
+                PlayerChildLock.locked.value = false
+                bridge.showControls()
+            },
+        )
+    }
+}
+
+/** Zona táctil de la barra de progreso: más alta que la barra (14 dp) para que se acierte con el dedo. */
+@Composable
+internal fun TouchSeekArea(onSeek: (fraction: Float, done: Boolean) -> Unit, bar: @Composable () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures { at -> onSeek((at.x / size.width).coerceIn(0f, 1f), true) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { at -> onSeek((at.x / size.width).coerceIn(0f, 1f), false) },
+                    onDragEnd = { onSeek(-1f, true) },
+                    onDragCancel = { onSeek(-1f, true) },
+                ) { change, _ ->
+                    change.consume()
+                    onSeek((change.position.x / size.width).coerceIn(0f, 1f), false)
+                }
+            }
+            .padding(vertical = 14.dp),
+    ) {
+        bar()
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
