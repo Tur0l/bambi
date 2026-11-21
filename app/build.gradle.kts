@@ -36,8 +36,8 @@ android {
         targetSdk = 35
         // Versión de upstream + revisión del fork: 1.0.8.1 = 1.0.8 de grodri99 con nuestra revisión 1.
         // versionCode = el de upstream ×100 + revisión, para que siempre suba al traer una versión nueva de upstream.
-        versionCode = 10802
-        versionName = "1.0.8.2"
+        versionCode = 10803
+        versionName = "1.0.8.3"
         manifestPlaceholders["appLabel"] = "@string/app_name"
 
         buildConfigField("String", "RD_TOKEN", "\"$rdToken\"")
