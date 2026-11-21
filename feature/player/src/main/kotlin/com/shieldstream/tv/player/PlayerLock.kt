@@ -12,7 +12,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -91,19 +91,26 @@ internal fun PlayerLockOverlay(hint: Int, onUnlock: () -> Unit) {
                 }
             },
     ) {
-        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                HoldToUnlockButton(onUnlock = onUnlock, onPress = { shownAt++ })
+        // Arriba a la derecha (donde está el candado en los controles) y pequeño: si sale por un toque sin querer, no
+        // tapa la imagen a quien está viendo.
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 18.dp, end = 18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     localizedStringResource(StringsR.string.player_touch_locked),
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleSmall,
-                    textAlign = TextAlign.Center,
+                    color = Color.White.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.End,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 18.dp, vertical = 8.dp),
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
                 )
+                HoldToUnlockButton(onUnlock = onUnlock, onPress = { shownAt++ })
             }
         }
     }
@@ -117,9 +124,9 @@ private fun HoldToUnlockButton(onUnlock: () -> Unit, onPress: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(84.dp)
+            .size(52.dp)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.6f))
+            .background(Color.Black.copy(alpha = 0.5f))
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false).consume()
@@ -137,13 +144,13 @@ private fun HoldToUnlockButton(onUnlock: () -> Unit, onPress: () -> Unit) {
                 }
             },
     ) {
-        Canvas(Modifier.fillMaxSize().padding(4.dp)) {
-            val stroke = 5.dp.toPx()
+        Canvas(Modifier.fillMaxSize().padding(3.dp)) {
+            val stroke = 3.5.dp.toPx()
             drawArc(Color.White.copy(alpha = 0.25f), 0f, 360f, useCenter = false, style = Stroke(stroke))
             if (progress.value > 0f) {
                 drawArc(accent, -90f, 360f * progress.value, useCenter = false, style = Stroke(stroke, cap = StrokeCap.Round))
             }
         }
-        Icon(AppIcons.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(38.dp))
+        Icon(AppIcons.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
     }
 }
