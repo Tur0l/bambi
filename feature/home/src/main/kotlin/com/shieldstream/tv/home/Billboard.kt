@@ -1,5 +1,7 @@
 package com.shieldstream.tv.home
 
+import com.shieldstream.tv.ui.touch.LocalTouchUi
+import com.shieldstream.tv.ui.touch.touchSwipeHorizontal
 import com.shieldstream.tv.model.Lang
 import com.shieldstream.tv.strings.R as StringsR
 import com.shieldstream.tv.strings.localizedStringResource
@@ -127,6 +129,8 @@ internal fun FeaturedCarousel(
                     else -> false
                 }
             }
+            // Fork táctil: con el dedo, deslizar a los lados = ◀ ▶.
+            .touchSwipeHorizontal(LocalTouchUi.current && items.size > 1) { next -> index = (index + if (next) 1 else items.size - 1) % items.size }
             .tvClickable { onOpen(current.item) },
     ) {
         Crossfade(targetState = current, animationSpec = tween(500), label = "featured") { featured ->

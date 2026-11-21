@@ -166,6 +166,36 @@ fun Modifier.touchPullDown(enabled: Boolean, onPull: () -> Unit): Modifier = if 
     nestedScroll(connection)
 }
 
+/**
+ * Deslizar a los lados sobre algo que en la tele cambia con ◀ ▶ (el carrusel de destacados del Inicio).
+ * [onSwipe] recibe true si se desliza hacia la izquierda (= siguiente). Al deslizar no salta el toque de abrir.
+ */
+fun Modifier.touchSwipeHorizontal(enabled: Boolean, onSwipe: (forward: Boolean) -> Unit): Modifier = if (!enabled) this else composed {
+    val latest by rememberUpdatedState(onSwipe)
+    val threshold = with(LocalDensity.current) { HORIZONTAL_SWIPE_THRESHOLD.toPx() }
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var horizontal = false
+            var fired = false
+            do {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                val dx = change.position.x - down.position.x
+                val dy = change.position.y - down.position.y
+                if (!horizontal && abs(dx) > viewConfiguration.touchSlop && abs(dx) > abs(dy)) horizontal = true
+                if (horizontal) change.consume()
+                if (horizontal && !fired && abs(dx) > threshold) {
+                    fired = true
+                    latest(dx < 0)
+                }
+            } while (change.pressed)
+        }
+    }
+}
+
+private val HORIZONTAL_SWIPE_THRESHOLD = 48.dp
+
 private val SWIPE_THRESHOLD = 72.dp
 
 /** Tiempo que se dejan ver las barras del sistema antes de volver a esconderlas. */
