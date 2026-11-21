@@ -6,7 +6,6 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-import java.util.Base64
 import java.util.Properties
 
 val localProps = Properties().apply {
@@ -17,28 +16,11 @@ val localProps = Properties().apply {
 // (ni las claves iniciales ni el secreto de Trakt), pase lo que pase en local.properties.
 val publicBuild: Boolean = rootProject.file(".public_build").let { it.exists() && it.readText().trim() == "1" }
 val seedKeys: Boolean = !publicBuild && localProps.getProperty("seedKeys")?.trim()?.lowercase() == "true"
-// Fork táctil: APK con claves para UN aparato concreto (p.ej. la tele de los padres), nunca para publicar:
-//   bash ./gradlew :app:assembleRelease -PseedFile=/ruta/claves.properties
-// Las claves se guardan una vez al primer arranque y sobreviven a las actualizaciones normales (que van sin claves).
-val seedFileProps: Properties? = (findProperty("seedFile") as String?)?.let { path ->
-    Properties().apply { file(path).inputStream().use { load(it) } }
-}
-fun seed(name: String): String =
-    seedFileProps?.getProperty(name)?.trim() ?: if (seedKeys) localProps.getProperty(name) ?: "" else ""
+fun seed(name: String): String = if (seedKeys) localProps.getProperty(name) ?: "" else ""
 fun privateProp(name: String): String = if (publicBuild) "" else localProps.getProperty(name)?.trim() ?: ""
 val rdToken: String = seed("rdToken")
 val subdlApiKey: String = seed("subdlApiKey")
 val tmdbApiKey: String = seed("tmdbApiKey")
-val allDebridKey: String = seed("allDebridKey")
-// Cualquier secreto del almacén de la app («secret.<nombre>=valor» en el seedFile): addons, otros debrid… Va en base64
-// para no tener que escapar URLs dentro del BuildConfig.
-val seedSecrets: String = seedFileProps?.let { props ->
-    props.stringPropertyNames().filter { it.startsWith("secret.") }.sorted()
-        .joinToString("\n") { "${it.removePrefix("secret.")}=${props.getProperty(it).trim()}" }
-        .takeIf { it.isNotEmpty() }
-        ?.let { Base64.getEncoder().encodeToString(it.toByteArray()) }
-} ?: ""
-val seedDebrid: String = seed("seedDebrid")
 val traktClientId: String = localProps.getProperty("traktClientId")?.trim() ?: ""
 val traktClientSecret: String = privateProp("traktClientSecret")
 val traktRedirectUri: String = localProps.getProperty("traktRedirectUri")?.trim() ?: "urn:ietf:wg:oauth:2.0:oob"
@@ -61,9 +43,6 @@ android {
         buildConfigField("String", "RD_TOKEN", "\"$rdToken\"")
         buildConfigField("String", "SUBDL_API_KEY", "\"$subdlApiKey\"")
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
-        buildConfigField("String", "ALLDEBRID_KEY", "\"$allDebridKey\"")
-        buildConfigField("String", "SEED_DEBRID", "\"$seedDebrid\"")
-        buildConfigField("String", "SEED_SECRETS", "\"$seedSecrets\"")
         buildConfigField("String", "TRAKT_CLIENT_ID", "\"$traktClientId\"")
         buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"$traktClientSecret\"")
         buildConfigField("String", "TRAKT_REDIRECT_URI", "\"$traktRedirectUri\"")

@@ -28,8 +28,6 @@ pantalla táctil que no son una tele. En una tele o caja Android TV la app se co
 - Se instala como **Bambi Táctil** (`com.shieldstream.tv.tactil`), al lado del Bambi original si se quiere.
 - Las actualizaciones automáticas salen de las Releases de este fork.
 - El enlace de «Seguir viendo» de Android TV usa el esquema `bambitactil://`, para no chocar con el original.
-- Addon de Torrentio limitado a webs en castellano preconfigurado si no hay ninguno (en el original solo en la
-  versión de pruebas). Se quita en Ajustes → Addons.
 
 ## Versiones
 
